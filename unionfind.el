@@ -106,12 +106,32 @@
    :read-only t
    :documentation "Underlying value."))
 
+(when unionfind--have-contracts
+  (defconst
+    unionfind-datum-c
+    (contract-predicate
+     #'unionfind-datum-p
+     "Expected a `unionfind-datum', but got %s"
+     'unionfind-datum-c
+     nil
+     t)))
+
 (cl-defstruct (unionfind-unionfind
                (:constructor unionfind--new))
   "The union-find datastructure."
   (data
    nil
    :documentation "Hash-set of data."))
+
+(when unionfind--have-contracts
+  (defconst
+    unionfind-unionfind-c
+    (contract-predicate
+     #'unionfind-unionfind-p
+     "Expected a `unionfind-unionfind', but got %s"
+     'unionfind-unionfind-c
+     nil
+     t)))
 
 (defsubst unionfind--maphash (func ht)
   "Map FUNC over HT, collecting the results."
@@ -128,7 +148,7 @@
 (unionfind--contract-defun
  unionfind-count
  (uf)
- :contract (contract-> contract-any-c contract-nat-number-c)
+ :contract (contract-> unionfind-unionfind-c contract-nat-number-c)
  "Count the number of elements in UF.
 
 The complexity of this operation is O(1)."
@@ -137,16 +157,32 @@ The complexity of this operation is O(1)."
 (unionfind--contract-defun
  unionfind--canonicalize
  (datum)
- :contract (contract-> contract-any-c contract-any-c)
+ :contract (contract-> unionfind-datum-c contract-any-c)
  "Canonicalize DATUM."
  (while (not (equal datum (unionfind-datum-parent datum)))
    (setq datum (unionfind-datum-parent datum)))
  datum)
 
+(when unionfind--have-contracts
+  (defconst
+    unionfind-canonical-c
+    (contract-predicate
+     (lambda (datum)
+       (and
+        (unionfind-datum-p datum)
+        (equal datum (unionfind--canonicalize datum))))
+     "Expected a canonical representative datum, but got %s"
+     'unionfind-canonical-c
+     nil
+     t)))
+
 (unionfind--contract-defun
  unionfind-insert
  (uf value)
- :contract (contract-> contract-any-c contract-any-c contract-any-c)
+ :contract (contract->
+            unionfind-unionfind-c
+            contract-any-c
+            unionfind-canonical-c)
  "Add VALUE to the union-find UF and return its canonical representative.
 
 This operation is idempotent.
@@ -181,7 +217,7 @@ The complexity of this operation is O(n) in the number of values."
 (unionfind--contract-defun
  unionfind-find
  (uf value)
- :contract (contract-> contract-any-c contract-any-c contract-any-c)
+ :contract (contract-> unionfind-unionfind-c contract-any-c unionfind-canonical-c)
  "Get the canonical representative of VALUE in UF.
 
 The canonical representatives of two different values in the same equivalence
@@ -198,7 +234,11 @@ The complexity of this operation is O(1) (amortized)."
 (unionfind--contract-defun
  unionfind-equiv-p
  (uf value1 value2)
- :contract (contract-> contract-any-c contract-any-c contract-any-c contract-any-c)
+ :contract (contract->
+            unionfind-unionfind-c
+            contract-any-c
+            contract-any-c
+            contract-any-c)
  "Check if VALUE1 and VALUE2 share a canonical representative in UF.
 
 The complexity of this operation is O(1) (amortized)."
@@ -209,7 +249,11 @@ The complexity of this operation is O(1) (amortized)."
 (unionfind--contract-defun
  unionfind-merge-canonical
  (_uf repr1 repr2)
- :contract (contract-> contract-any-c contract-any-c contract-any-c contract-nil-c)
+ :contract (contract->
+            unionfind-unionfind-c
+            unionfind-canonical-c
+            unionfind-canonical-c
+            contract-nil-c)
  "Merge the equivalence classes represented by REPR1 and REPR2 in UF.
 
 The complexity of this operation is O(1) (amortized)."
@@ -226,7 +270,11 @@ The complexity of this operation is O(1) (amortized)."
 (unionfind--contract-defun
  unionfind-merge
  (uf value1 value2)
- :contract (contract-> contract-any-c contract-any-c contract-any-c contract-nil-c)
+ :contract (contract->
+            unionfind-unionfind-c
+            contract-any-c
+            contract-any-c
+            contract-nil-c)
  "Merge the equivalence classes of VALUE1 and VALUE2 in UF.
 
 The complexity of this operation is O(1) (amortized)."
@@ -238,7 +286,7 @@ The complexity of this operation is O(1) (amortized)."
 (unionfind--contract-defun
  unionfind--show
  (uf)
- :contract (contract-> contract-any-c contract-string-c)
+ :contract (contract-> unionfind-unionfind-c contract-string-c)
  "Show UF; for debugging purposes only."
  (string-join
   (unionfind--maphash
@@ -254,7 +302,7 @@ The complexity of this operation is O(1) (amortized)."
 (unionfind--contract-defun
  unionfind-to-hash-set
  (uf)
- :contract (contract-> contract-any-c contract-any-c)
+ :contract (contract-> unionfind-unionfind-c contract-any-c)
  "Create a two-level nested hash set containing each equivalence class in UF.
 
 The complexity of this operation is O(n^2)."
